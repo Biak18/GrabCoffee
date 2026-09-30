@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GrabCoffee.Api/GrabCoffee.Api.csproj" />
+    <Project Path="src/GrabCoffee.Application/GrabCoffee.Application.csproj" />
+    <Project Path="src/GrabCoffee.Domain/GrabCoffee.Domain.csproj" />
+    <Project Path="src/GrabCoffee.Infrastructure/GrabCoffee.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GrabCoffee.UnitTests/GrabCoffee.UnitTests.csproj" />
+  </Folder>
+</Solution>
