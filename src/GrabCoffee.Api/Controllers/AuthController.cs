@@ -8,7 +8,6 @@ using GrabCoffee.Application.Features.Auth.Register;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using TextCopy;
 
 namespace GrabCoffee.Api.Controllers;
 
@@ -23,7 +22,6 @@ public sealed class AuthController(ISender sender) : ControllerBase
         CancellationToken ct)
     {
         var result = await sender.Send(new LoginCommand(request.Email, request.Password), ct);
-        await ClipboardService.SetTextAsync(result.AccessToken);
         return Ok(result);
     }
 
