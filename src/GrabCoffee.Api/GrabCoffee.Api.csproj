@@ -7,10 +7,13 @@
     <UserSecretsId>fce8c5b1-730d-4a07-98ae-22b4fd72673e</UserSecretsId>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <DockerfileContext>..\..</DockerfileContext>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.8" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.24.1-preview.1" />
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.10" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
     <PackageReference Include="TextCopy" Version="6.2.1" />
