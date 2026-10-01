@@ -1,65 +1,130 @@
-using CloudinaryDotNet;
-using CloudinaryDotNet.Actions;
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using GrabCoffee.Application.Abstractions;
 using Microsoft.Extensions.Configuration;
 
 namespace GrabCoffee.Infrastructure.Storage;
 
-public sealed class CloudinaryOptions
+// Cloudinary (signed upload) behind the generic IStorageService abstraction.
+// Secrets never leave the backend; trust comes from the request signature
+// below plus [Authorize] (and ownership checks) on the controllers.
+public sealed class CloudinaryStorageService(
+    HttpClient httpClient,
+    IConfiguration configuration) : IStorageService
 {
-    public string CloudName { get; set; } = string.Empty;
-    public string ApiKey { get; set; } = string.Empty;
-    public string ApiSecret { get; set; } = string.Empty;
-}
+    private static readonly HashSet<string> Buckets =
+        new(StringComparer.OrdinalIgnoreCase) { "avatars", "coffee-images" };
 
-public sealed class CloudinaryStorageService : IImageUploadService
-{
-    private readonly Cloudinary _cloudinary;
+    private static readonly HashSet<string> AllowedContentTypes =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/jpeg", "image/png", "image/webp", "image/gif",
+        };
 
-    public CloudinaryStorageService(IConfiguration config)
+    public IReadOnlySet<string> AllowedBuckets => Buckets;
+
+    public async Task<string> UploadAsync(
+        string bucket,
+        string fileName,
+        Stream content,
+        string contentType,
+        CancellationToken cancellationToken,
+        string? publicId = null)
     {
-        var section = config.GetSection("Cloudinary");
-        var options = section.Get<CloudinaryOptions>()
-            ?? throw new InvalidOperationException("Cloudinary configuration is missing.");
-        if (string.IsNullOrWhiteSpace(options.CloudName)
-            || string.IsNullOrWhiteSpace(options.ApiKey)
-            || string.IsNullOrWhiteSpace(options.ApiSecret))
+        if (!Buckets.Contains(bucket))
+        {
             throw new InvalidOperationException(
-                "Cloudinary:CloudName, Cloudinary:ApiKey and Cloudinary:ApiSecret are required.");
+                $"Unknown bucket '{bucket}'. Allowed: {string.Join(", ", Buckets)}.");
+        }
 
-        _cloudinary = new Cloudinary(new Account(options.CloudName, options.ApiKey, options.ApiSecret));
-    }
-
-    public async Task<string> UploadAvatarAsync(Guid userId, Stream content, string fileName, CancellationToken ct)
-    {
-        var result = await _cloudinary.UploadAsync(new ImageUploadParams
+        if (!AllowedContentTypes.Contains(contentType))
         {
-            File = new FileDescription(fileName, content),
-            PublicId = $"grabcoffee/avatars/{userId}",
-            Overwrite = true,
-        }, ct);
+            throw new InvalidOperationException($"Unsupported content type '{contentType}'.");
+        }
 
-        return RequireSecureUrl(result);
-    }
-
-    public async Task<string> UploadCoffeeImageAsync(Guid storeId, Stream content, string fileName, CancellationToken ct)
-    {
-        var result = await _cloudinary.UploadAsync(new ImageUploadParams
+        if (content.Length > 50 * 1024 * 1024)
         {
-            File = new FileDescription(fileName, content),
-            PublicId = $"grabcoffee/coffees/{storeId}/{Guid.NewGuid()}",
-            Overwrite = false,
-        }, ct);
+            throw new InvalidOperationException("File too large. Maximum size is 50 MB.");
+        }
 
-        return RequireSecureUrl(result);
+        var cloud = configuration["Cloudinary:Name"] ?? configuration["Cloudinary:CloudName"];
+        var apiKey = configuration["Cloudinary:ApiKey"];
+        var apiSecret = configuration["Cloudinary:ApiSecret"];
+
+        if (string.IsNullOrWhiteSpace(cloud) ||
+            string.IsNullOrWhiteSpace(apiKey) ||
+            string.IsNullOrWhiteSpace(apiSecret))
+        {
+            throw new InvalidOperationException(
+                "Cloudinary is not configured (Cloudinary:Name/ApiKey/ApiSecret).");
+        }
+
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+        var folder = $"grabcoffee/{bucket.ToLowerInvariant()}";
+
+        var signedParams = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["folder"] = folder,
+            ["timestamp"] = timestamp,
+        };
+        if (publicId is not null)
+            signedParams["public_id"] = publicId;
+
+        var signature = Sign(signedParams, apiSecret);
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(apiKey), "api_key");
+        form.Add(new StringContent(timestamp), "timestamp");
+        form.Add(new StringContent(folder), "folder");
+        if (publicId is not null)
+            form.Add(new StringContent(publicId), "public_id");
+        form.Add(new StringContent(signature), "signature");
+
+        using var streamContent = new StreamContent(content);
+        streamContent.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        form.Add(streamContent, "file", fileName);
+
+        var response = await httpClient.PostAsync(
+            $"https://api.cloudinary.com/v1_1/{cloud}/image/upload",
+            form,
+            cancellationToken);
+
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Upload failed ({response.StatusCode}): {body}");
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("secure_url", out var url) &&
+                url.GetString() is { Length: > 0 } secureUrl)
+            {
+                return secureUrl;
+            }
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Upload failed: unexpected Cloudinary response: {body}", ex);
+        }
+
+        throw new InvalidOperationException($"Upload failed: unexpected Cloudinary response: {body}");
     }
 
-    private static string RequireSecureUrl(ImageUploadResult result)
+    // Cloudinary signature = SHA-1 hex of alphabetically-joined params + secret.
+    // (file, api_key, resource_type and cloud_name are never part of it.)
+    private static string Sign(IDictionary<string, string> parameters, string apiSecret)
     {
-        if (result.StatusCode == System.Net.HttpStatusCode.OK
-            && result.SecureUrl is not null)
-            return result.SecureUrl.ToString();
+        var payload = string.Join(
+                "&",
+                parameters.OrderBy(p => p.Key, StringComparer.Ordinal)
+                    .Select(p => $"{p.Key}={p.Value}")) + apiSecret;
 
-        throw new InvalidOperationException($"Image upload failed: {result.Error?.Message ?? result.StatusCode.ToString()}");
+        return Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(payload)))
+            .ToLowerInvariant();
     }
 }

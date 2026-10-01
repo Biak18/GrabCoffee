@@ -26,7 +26,7 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
-        services.AddScoped<IImageUploadService, CloudinaryStorageService>();
+        services.AddHttpClient<IStorageService, CloudinaryStorageService>();
         services.AddHttpClient<IAuthClient, SupabaseAuthClient>(client =>
         {
             client.BaseAddress = new Uri($"{supabaseUrl}/auth/v1/");

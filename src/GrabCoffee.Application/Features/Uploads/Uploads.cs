@@ -44,7 +44,7 @@ public sealed class UploadCoffeeImageValidator : UploadValidator<UploadCoffeeIma
     }
 }
 
-public sealed class UploadAvatarHandler(IImageUploadService uploads, ICurrentUser currentUser)
+public sealed class UploadAvatarHandler(IStorageService storage, ICurrentUser currentUser)
     : IRequestHandler<UploadAvatarCommand, string>
 {
     public async Task<string> Handle(UploadAvatarCommand request, CancellationToken ct)
@@ -53,12 +53,19 @@ public sealed class UploadAvatarHandler(IImageUploadService uploads, ICurrentUse
             throw new UnauthorizedAccessException("Not authenticated.");
 
         using var stream = new MemoryStream(request.File.Content, writable: false);
-        return await uploads.UploadAvatarAsync(userId, stream, request.File.FileName, ct);
+        // Stable public id per user: re-upload overwrites the old avatar.
+        return await storage.UploadAsync(
+            "avatars",
+            request.File.FileName,
+            stream,
+            request.File.ContentType ?? "image/jpeg",
+            ct,
+            publicId: $"grabcoffee/avatars/{userId}");
     }
 }
 
 public sealed class UploadCoffeeImageHandler(
-    IImageUploadService uploads, IAppDbContext db, ICurrentUser currentUser)
+    IStorageService storage, IAppDbContext db, ICurrentUser currentUser)
     : IRequestHandler<UploadCoffeeImageCommand, string>
 {
     public async Task<string> Handle(UploadCoffeeImageCommand request, CancellationToken ct)
@@ -66,6 +73,11 @@ public sealed class UploadCoffeeImageHandler(
         var store = await StoreAccess.RequireMyStoreAsync(db, currentUser, ct);
 
         using var stream = new MemoryStream(request.File.Content, writable: false);
-        return await uploads.UploadCoffeeImageAsync(store.Id, stream, request.File.FileName, ct);
+        return await storage.UploadAsync(
+            "coffee-images",
+            request.File.FileName,
+            stream,
+            request.File.ContentType ?? "image/jpeg",
+            ct);
     }
 }
