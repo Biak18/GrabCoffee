@@ -9,6 +9,7 @@ using GrabCoffee.Application.Features.Stores.DeletePromotion;
 using GrabCoffee.Application.Features.Stores.GetMyOptions;
 using GrabCoffee.Application.Features.Stores.GetMyPromotions;
 using GrabCoffee.Application.Features.Stores.GetMyStore;
+using GrabCoffee.Application.Features.Stores.GetMyEarnings;
 using GrabCoffee.Application.Features.Stores.GetMyStoreCoffees;
 using GrabCoffee.Application.Features.Stores.GetStoreById;
 using GrabCoffee.Application.Features.Stores.GetStores;
@@ -259,6 +260,15 @@ public sealed class StoresController(ISender sender) : ControllerBase
         CancellationToken ct = default)
     {
         var result = await sender.Send(new GetShopOrdersQuery(page, pageSize), ct);
+        return Ok(result);
+    }
+
+    // ---- My-store earnings (seller) ----
+    [HttpGet("mine/earnings")]
+    [Authorize]
+    public async Task<IActionResult> GetMyEarnings(CancellationToken ct)
+    {
+        var result = await sender.Send(new GetMyEarningsQuery(), ct);
         return Ok(result);
     }
 

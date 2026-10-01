@@ -1,4 +1,5 @@
 using GrabCoffee.Application.Features.Orders;
+using GrabCoffee.Application.Features.Stores.GetMyEarnings;
 using GrabCoffee.Domain.Entities;
 
 namespace GrabCoffee.Application.Abstractions;
@@ -80,7 +81,9 @@ public interface IAppDbContext
     Task RegisterDriverAsync(Guid userId, string? fullName, string? phone, string? vehicle, CancellationToken ct);
     Task SetDriverAvailabilityAsync(Guid userId, bool isAvailable, CancellationToken ct);
     Task<List<Driver>> GetAvailableDriversAsync(CancellationToken ct);
-    Task UpdateProfileAsync(Guid userId, string? fullName, string? avatarUrl, CancellationToken ct);    Task DeleteAccountAsync(Guid userId, CancellationToken ct);
+    Task UpdateProfileAsync(Guid userId, string? fullName, string? avatarUrl, CancellationToken ct);
+    Task DeleteAccountAsync(Guid userId, CancellationToken ct);
+    Task<List<SellerEarningRow>> GetSellerEarningRowsAsync(Guid storeId, DateTime sinceUtc, CancellationToken ct);
     Task UpsertPushTokenAsync(Guid userId, string token, CancellationToken ct);
     Task DeleteMyPushTokensAsync(Guid userId, CancellationToken ct);
     Task<int> SaveChangesAsync(CancellationToken ct);

@@ -1,6 +1,7 @@
 using GrabCoffee.Application.Abstractions;
 using GrabCoffee.Application.Common.Exceptions;
 using GrabCoffee.Application.Features.Orders;
+using GrabCoffee.Application.Features.Stores.GetMyEarnings;
 using GrabCoffee.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -708,6 +709,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public async Task DeleteMyPushTokensAsync(Guid userId, CancellationToken ct)
         => await PushTokens.Where(t => t.UserId == userId).ExecuteDeleteAsync(ct);
+
+    // Narrow columns only (~30 days), mirroring the mobile bound so the
+    // payload stays constant-size as order history grows.
+    public Task<List<SellerEarningRow>> GetSellerEarningRowsAsync(Guid storeId, DateTime sinceUtc, CancellationToken ct)
+        => Orders.AsNoTracking()
+            .Where(o => o.StoreId == storeId && o.PlacedAt != null && o.PlacedAt >= sinceUtc)
+            .Select(o => new SellerEarningRow(o.Status, o.Total, o.PlacedAt))
+            .ToListAsync(ct);
 
     // ---- Promotions ----
     // Mirrors fetchActivePromotions: only CODELESS promos auto-apply.
