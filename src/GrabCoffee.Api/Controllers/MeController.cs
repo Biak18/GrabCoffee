@@ -5,19 +5,19 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GrabCoffee.Api.Controllers;
 
-// Own account: display name + self-deletion (delete_account port).
-// Avatar upload stays direct-to-Storage on mobile, unchanged.
+// Own account: profile update (name + avatar URL from POST /uploads/avatar)
+// and self-deletion (delete_account port).
 [ApiController]
 [Route("me")]
 public sealed class MeController(ISender sender) : ControllerBase
 {
     [HttpPatch]
     [Authorize]
-    public async Task<IActionResult> UpdateDisplayName(
-        [FromBody] UpdateDisplayNameRequest request,
+    public async Task<IActionResult> UpdateProfile(
+        [FromBody] UpdateProfileRequest request,
         CancellationToken ct)
     {
-        await sender.Send(new UpdateDisplayNameCommand(request.FullName), ct);
+        await sender.Send(new UpdateProfileCommand(request.FullName, request.AvatarUrl), ct);
         return NoContent();
     }
 
@@ -29,5 +29,5 @@ public sealed class MeController(ISender sender) : ControllerBase
         return NoContent();
     }
 
-    public sealed record UpdateDisplayNameRequest(string FullName);
+    public sealed record UpdateProfileRequest(string? FullName, string? AvatarUrl);
 }

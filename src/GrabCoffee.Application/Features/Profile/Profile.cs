@@ -4,29 +4,34 @@ using MediatR;
 
 namespace GrabCoffee.Application.Features.Profile;
 
-// Mirrors updateDisplayName + deleteAccount (delete_account RPC).
-// Avatar upload stays direct-to-Storage on mobile, unchanged.
-public sealed record UpdateDisplayNameCommand(string FullName) : IRequest;
+// Own profile: display name + avatar URL (avatar bytes go through
+// POST /uploads/avatar first, which returns the Cloudinary URL).
+public sealed record UpdateProfileCommand(string? FullName, string? AvatarUrl) : IRequest;
 
 public sealed record DeleteAccountCommand : IRequest;
 
-public sealed class UpdateDisplayNameValidator : AbstractValidator<UpdateDisplayNameCommand>
+public sealed class UpdateProfileValidator : AbstractValidator<UpdateProfileCommand>
 {
-    public UpdateDisplayNameValidator()
+    public UpdateProfileValidator()
     {
-        RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
+        RuleFor(x => x.FullName).MaximumLength(200);
+        RuleFor(x => x.AvatarUrl).MaximumLength(1000);
     }
 }
 
-public sealed class UpdateDisplayNameHandler(IAppDbContext db, ICurrentUser currentUser)
-    : IRequestHandler<UpdateDisplayNameCommand>
+public sealed class UpdateProfileHandler(IAppDbContext db, ICurrentUser currentUser)
+    : IRequestHandler<UpdateProfileCommand>
 {
-    public async Task Handle(UpdateDisplayNameCommand request, CancellationToken ct)
+    public async Task Handle(UpdateProfileCommand request, CancellationToken ct)
     {
         if (currentUser.UserId is not { } userId)
             throw new UnauthorizedAccessException("Not authenticated.");
 
-        await db.UpdateDisplayNameAsync(userId, request.FullName.Trim(), ct);
+        await db.UpdateProfileAsync(
+            userId,
+            string.IsNullOrWhiteSpace(request.FullName) ? null : request.FullName.Trim(),
+            string.IsNullOrWhiteSpace(request.AvatarUrl) ? null : request.AvatarUrl.Trim(),
+            ct);
     }
 }
 

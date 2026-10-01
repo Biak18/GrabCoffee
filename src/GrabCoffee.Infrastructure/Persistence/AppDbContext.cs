@@ -656,11 +656,14 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             .OrderBy(d => d.CreatedAt)
             .ToListAsync(ct);
 
-    public async Task UpdateDisplayNameAsync(Guid userId, string fullName, CancellationToken ct)
+    public async Task UpdateProfileAsync(Guid userId, string? fullName, string? avatarUrl, CancellationToken ct)
     {
         var profile = await Profiles.FirstOrDefaultAsync(p => p.Id == userId, ct)
             ?? throw new NotFoundException("Profile not found.");
-        profile.FullName = fullName;
+        if (fullName is not null)
+            profile.FullName = fullName;
+        if (avatarUrl is not null)
+            profile.AvatarUrl = avatarUrl;
         await base.SaveChangesAsync(ct);
     }
 

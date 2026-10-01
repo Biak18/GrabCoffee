@@ -1,6 +1,7 @@
 using GrabCoffee.Application.Abstractions;
 using GrabCoffee.Infrastructure.Authentication;
 using GrabCoffee.Infrastructure.Persistence;
+using GrabCoffee.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +26,7 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<IImageUploadService, CloudinaryStorageService>();
         services.AddHttpClient<IAuthClient, SupabaseAuthClient>(client =>
         {
             client.BaseAddress = new Uri($"{supabaseUrl}/auth/v1/");
