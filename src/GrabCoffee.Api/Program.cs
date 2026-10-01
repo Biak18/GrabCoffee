@@ -1,8 +1,10 @@
+using GrabCoffee.Api.Health;
 using GrabCoffee.Api.Middleware;
 using GrabCoffee.Application;
 using GrabCoffee.Application.Authorization;
 using GrabCoffee.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Scalar.AspNetCore;
@@ -36,6 +38,10 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
+
+// Liveness (app running) + readiness (Postgres reachable).
+builder.Services.AddHealthChecks()
+    .AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"]);
 
 // ---- Supabase JWT (§3 of SUPABASE_AUTH_PATTERN) ----
 var supabaseUrl = builder.Configuration["Supabase:Url"]?.TrimEnd('/')
@@ -75,6 +81,25 @@ builder.Services
 var app = builder.Build();
 
 app.UseExceptionHandler();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = _ => false, // liveness only: no checks, 200 means alive
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(HealthResponses.WriteJson(report));
+    },
+});
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Tags.Contains("ready"),
+    ResponseWriter = async (context, report) =>
+    {
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(HealthResponses.WriteJson(report));
+    },
+});
 
 if (app.Environment.IsDevelopment())
 {
